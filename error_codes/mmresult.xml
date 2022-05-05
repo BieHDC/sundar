@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" ?>
+<MmresultList>
+	<Mmresult text="MMSYSERR_NOERROR" value="00000000" />
+	<Mmresult text="MMSYSERR_ERROR" value="00000001" />
+	<Mmresult text="MMSYSERR_BADDEVICEID" value="00000002" />
+	<Mmresult text="MMSYSERR_NOTENABLED" value="00000003" />
+	<Mmresult text="MMSYSERR_ALLOCATED" value="00000004" />
+	<Mmresult text="MMSYSERR_INVALHANDLE" value="00000005" />
+	<Mmresult text="MMSYSERR_NODRIVER" value="00000006" />
+	<Mmresult text="MMSYSERR_NOMEM" value="00000007" />
+	<Mmresult text="MMSYSERR_NOTSUPPORTED" value="00000008" />
+	<Mmresult text="MMSYSERR_BADERRNUM" value="00000009" />
+	<Mmresult text="MMSYSERR_INVALFLAG" value="00000010" />
+	<Mmresult text="MMSYSERR_INVALPARAM" value="00000011" />
+	<Mmresult text="MMSYSERR_HANDLEBUSY" value="00000012" />
+	<Mmresult text="MMSYSERR_INVALIDALIAS" value="00000013" />
+	<Mmresult text="MMSYSERR_BADDB" value="00000014" />
+	<Mmresult text="MMSYSERR_KEYNOTFOUND" value="00000015" />
+	<Mmresult text="MMSYSERR_READERROR" value="00000016" />
+	<Mmresult text="MMSYSERR_WRITEERROR" value="00000017" />
+	<Mmresult text="MMSYSERR_DELETEERROR" value="00000018" />
+	<Mmresult text="MMSYSERR_VALNOTFOUND" value="00000019" />
+	<Mmresult text="MMSYSERR_NODRIVERCB" value="00000020" />
+	<Mmresult text="UNDEFINED" value="00000021" />
+	<Mmresult text="UNDEFINED" value="00000022" />
+	<Mmresult text="UNDEFINED" value="00000023" />
+	<Mmresult text="UNDEFINED" value="00000024" />
+	<Mmresult text="UNDEFINED" value="00000025" />
+	<Mmresult text="UNDEFINED" value="00000026" />
+	<Mmresult text="UNDEFINED" value="00000027" />
+	<Mmresult text="UNDEFINED" value="00000028" />
+	<Mmresult text="UNDEFINED" value="00000029" />
+	<Mmresult text="UNDEFINED" value="00000030" />
+	<Mmresult text="UNDEFINED" value="00000031" />
+	<Mmresult text="WAVERR_BADFORMAT" value="00000032" />
+	<Mmresult text="WAVERR_STILLPLAYING" value="00000033" />
+	<Mmresult text="WAVERR_UNPREPARED" value="00000034" />
+</MmresultList>

@@ -1,0 +1,47 @@
+# ===== Matrix Authentication =====
+# The Matrix homeserver to connect to
+homeserver: "https://sourceserver.at"
+
+# Login Type
+# (pw)password/(at)accesstoken
+#login_type: "password"
+login_type: "accesstoken"
+
+# (pw)The Username/(at)The UserID
+#username_or_userid: "rapsfleisch"
+username_or_userid: "@rapsfleisch:sourceserver.at"
+
+# (pw)The account password/(at)The Access Token
+#password_or_accesstoken: "DO NOT REDEEM THE PASSWORD"
+password_or_accesstoken: "DO NOT REDEEM THE ACCESSTOKEN ETHER"
+
+
+# ===== Bot Settings =====
+# The prefix the bot should trigger on
+prefix: "!"
+
+# The bot display name
+device_display_name: "Safed Sundarata 1.9.0"
+
+# The identifier, useful to not spawn new sessons all the time
+unique_device_id: "SafedSundarata_1"
+
+# Master user who can do all the scary stuff
+master: "@biehdc:reactos.org"
+
+# The Channel the bot dumps events into, set it empty if unneeded
+events_channel: "!QXaaAzzzKxyoVVVxgV:sourceserver.at"
+
+# Set this to true if only the botmaster should be allowed to invite the bot to places
+# If false, people can invite the bot to any room.
+limit_invites: false
+
+# The unique prefix for the account storage to make sure
+# no data collides if you run multiple instances on the same account
+accountstore_prefix: "org.safed_sundarata_1."
+
+
+# ===== Debug/Develop =====
+# Accountstore Debug Option: Set this to true if you do not want to push Accountstore data to the server,
+# but only keep a local cache. Settings are lost after a reboot.
+accountstore_debug: false

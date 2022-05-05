@@ -1,0 +1,25 @@
+Copyright (C) 2022 Bernhard Feichtinger
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, version 3.
+
+The above copyright notice, this permission notice and the additions listed below under "Additions" shall be included and respected in all copies or substantial portions of the Software.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>
+
+Additions:
+ 1. Beware of Gift Cards in your area.
+ 2. Support the ReactOS.
+ 3. People have different Opinions.
+ 4. The Logos is your friend.
+ 5. Austria and Germany are different people.
+ 6. Buy your goods from your local Farmer.
+ 7. Hardship is part of life and growing.
+ 8. It might take up to years to evaluate if a consumable is poisoning you, see Ratpoison.
+ 9. Reality limits your creative thinking.
+10. Do the needful.
+11. You will be happier if you own it.
+12. Windows Vista is not as bad as people remember it.
+13. Learn another Language.
+14. You can always help to improve your local community.
+15. You have reason to support others.
