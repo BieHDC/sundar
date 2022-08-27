@@ -202,6 +202,9 @@ const granulatymsg = time.Millisecond*100
 const timelimit = time.Second * 3
 func (cmdhdlr *CommandHandler) HandleDispatch(evt *event.Event) {
 	argv, argc := sanitiseParseCommandWithArguments(evt.Content.AsMessage().Body, cmdhdlr.prefix)
+	if argc < 1 {
+		return	
+	}
 	if strings.HasPrefix(evt.Content.AsMessage().Body, cmdhdlr.prefix) {
 		// Simple Ratelimiter
 		rl, exists := ratelimit[evt.Sender]
