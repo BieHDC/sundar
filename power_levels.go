@@ -6,6 +6,7 @@ import (
 	id "maunium.net/go/mautrix/id"
 	"strings"
 	"strconv"
+	"fmt"
 )
 
 // this is the room power levels changed callback
@@ -14,178 +15,172 @@ func (cmdhdlr *CommandHandler) PowerLevelsChange(targetroom id.RoomID, newpowerl
 }
 
 func (cmdhdlr *CommandHandler) loadRoomsAndPowerlevelsFromUserdata() {
+	if cmdhdlr.client == nil {
+		fmt.Println("!!NO VALID CLIENT FOUND, ASSUMING TEST MODE!!")
+		return
+	}
+
 	resp, err := cmdhdlr.client.JoinedRooms()
 	if err != nil {
-		BotNotifyEventsChannel(cmdhdlr, "Failed to get joined rooms!")
-	} else {
-		cmdhdlr.joined_rooms = resp.JoinedRooms
-		for room := range cmdhdlr.joined_rooms {
-			ret := event.PowerLevelsEventContent{}
-			err := cmdhdlr.client.StateEvent(cmdhdlr.joined_rooms[room], event.StatePowerLevels, "", &ret)
-			if err != nil {
-				BotNotifyEventsChannel(cmdhdlr, "Failed to get power levels: "+err.Error())
-			} else {
-				cmdhdlr.masters[cmdhdlr.joined_rooms[room]] = ret.Users
-			}
+		botNotifyEventsChannel(cmdhdlr, "Failed to get joined rooms!")
+		return
+	}
+
+	cmdhdlr.joined_rooms = resp.JoinedRooms
+	for room := range cmdhdlr.joined_rooms {
+		ret := event.PowerLevelsEventContent{}
+		err := cmdhdlr.client.StateEvent(cmdhdlr.joined_rooms[room], event.StatePowerLevels, "", &ret)
+		if err != nil {
+			botNotifyEventsChannel(cmdhdlr, "Failed to get power levels: "+err.Error())
+			continue
 		}
+
+		cmdhdlr.masters[cmdhdlr.joined_rooms[room]] = ret.Users
 	}
 }
 
 func (cmdhdlr *CommandHandler) loadPowerLevelsOverrides() {
-	cmdhdlr.FetchData("powerlevelsoverrides_1", &cmdhdlr.alloverrides)
+	cmdhdlr.accountstore.FetchData(cmdhdlr.client, "powerlevelsoverrides_1", &cmdhdlr.alloverrides)
 }
 
 func (cmdhdlr *CommandHandler) savePowerLevelsOverrides() {
-	cmdhdlr.StoreData("powerlevelsoverrides_1", &cmdhdlr.alloverrides)
+	cmdhdlr.accountstore.StoreData(cmdhdlr.client, "powerlevelsoverrides_1", &cmdhdlr.alloverrides)
 }
 
-func doPowerlevelOverride(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, targetroom id.RoomID, commandname string, newpowerlevel string, statusroom id.RoomID) bool {
+func doPowerlevelOverride(cmdhdlr *CommandHandler, sender id.UserID, targetroom id.RoomID, commandname string, newpowerlevel string, statusroom id.RoomID) BotReply {
+	powerlevel, err := strconv.Atoi(strings.TrimSpace(newpowerlevel))
+	if err != nil {
+		return BotPrintSimple(statusroom, "Could not convert >" + newpowerlevel + "< to an integer.")
+	}
+
 	command, ok := cmdhdlr.allcommands[commandname]
-	if ok {
-		if cmdhdlr.hasUserRequiredPowerlevel(targetroom, sender, commandname, &command) {
-			powerlevel, err := strconv.Atoi(strings.TrimSpace(newpowerlevel))
-			if err == nil {
-				// we have the power, the command and the powerlevel, lets go
-				//3. change the internal map powerlevel
-				cmdhdlr.alloverrides[commandname][targetroom] = powerlevel
-				//4. publish the change to the userdata
-				cmdhdlr.savePowerLevelsOverrides()
-				//5. invalidate help text cache
-				cmdhdlr.invalidateHelpTextCacheForRoom(targetroom)
-				BotReplyMsg(cmdhdlr, statusroom, "Set new powerlevel of >" + newpowerlevel + "< for command >" + commandname + ".")
-			} else {
-				BotReplyMsg(cmdhdlr, statusroom, "Could not convert >" + newpowerlevel + "< to an integer.")
-				return false
-			}
-		} else {
-			BotReplyMsg(cmdhdlr, statusroom, "You do not have permission to change the powerlevel of a command(" + 
-				strconv.Itoa(cmdhdlr.needsAtLeastPowerlevel(targetroom, commandname, &command)) + 
-				") with higher level than you(" + strconv.Itoa(cmdhdlr.userHasPowerlevel(targetroom, sender)) + ").")
-		}
-	} else {
-		BotReplyMsg(cmdhdlr, statusroom, "Command >"+commandname+"< not found.")
-		return false
+	if !ok {
+		return BotPrintSimple(statusroom, "Command >"+commandname+"< not found.")
 	}
-	return true
+
+	if !cmdhdlr.hasUserRequiredPowerlevel(targetroom, sender, commandname, command.RequiredPowerlevel) {
+		return BotPrintSimple(statusroom, "You do not have permission to change the powerlevel of a command(" + 
+			strconv.Itoa(cmdhdlr.needsAtLeastPowerlevel(targetroom, commandname, command.RequiredPowerlevel)) + 
+			") with higher level than you(" + strconv.Itoa(cmdhdlr.userHasPowerlevel(targetroom, sender)) + ").")
+		
+	}
+
+	// we have the power, the command and the powerlevel, lets go
+	//3. change the internal map powerlevel
+	cmdhdlr.alloverrides[commandname][targetroom] = powerlevel
+	//4. publish the change to the userdata
+	cmdhdlr.savePowerLevelsOverrides()
+	//5. invalidate help text cache
+	cmdhdlr.helptextcache.invalidateHelpTextCacheForRoom(targetroom)
+
+	return BotPrintSimple(statusroom, "Set new powerlevel of >" + newpowerlevel + "< for command >" + commandname + ".")
 }
 
-func HandleCommandPowerlevelOverride(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc == 3 {
-		return doPowerlevelOverride(cmdhdlr, room, sender, room, argv[1], argv[2], statusroom)
-	} else if argc == 4 {
-		targetroom, err := parseRoomID(argv[1])
+func HandleCommandPowerlevelOverride(ca CommandArgs) BotReply {
+	if ca.argc == 3 {
+		return doPowerlevelOverride(ca.cmdhdlr, ca.sender, ca.room, ca.argv[1], ca.argv[2], ca.statusroom)
+	} else if ca.argc == 4 {
+		targetroom, err := parseRoomID(ca.argv[1])
 		if err == nil && targetroom != nil {
-			return doPowerlevelOverride(cmdhdlr, room, sender, targetroom.RoomID(), argv[2], argv[3], statusroom)
+			return doPowerlevelOverride(ca.cmdhdlr, ca.sender, targetroom.RoomID(), ca.argv[2], ca.argv[3], ca.statusroom)
 		} else {
-			BotReplyMsg(cmdhdlr, statusroom, "Error parsing RoomID: " + err.Error() + ".")
-			return false
+			return BotPrintSimple(ca.statusroom, "Error parsing RoomID: " + err.Error() + ".")
 		}
 	} else {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
 	}
-	return true
 }
 
-func HandleCommandPowerlevelBlock(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc == 2 {
-		return doPowerlevelOverride(cmdhdlr, room, sender, room, argv[1], "100", statusroom)
-	} else if argc == 3 {
-		targetroom, err := parseRoomID(argv[1])
+func HandleCommandPowerlevelBlock(ca CommandArgs) BotReply {
+	if ca.argc == 2 {
+		return doPowerlevelOverride(ca.cmdhdlr, ca.sender, ca.room, ca.argv[1], "100", ca.statusroom)
+	} else if ca.argc == 3 {
+		targetroom, err := parseRoomID(ca.argv[1])
 		if err == nil && targetroom != nil {
-			return doPowerlevelOverride(cmdhdlr, room, sender, targetroom.RoomID(), argv[2], "100", statusroom)
+			return doPowerlevelOverride(ca.cmdhdlr, ca.sender, targetroom.RoomID(), ca.argv[2], "100", ca.statusroom)
 		} else {
-			BotReplyMsg(cmdhdlr, statusroom, "Error parsing RoomID: " + err.Error() + ".")
-			return false
+			return BotPrintSimple(ca.statusroom, "Error parsing RoomID: " + err.Error() + ".")
 		}
 	} else {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
 	}
-	return true
 }
 
-func HandleCommandPowerlevelOverrideReset(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
+func HandleCommandPowerlevelOverrideReset(ca CommandArgs) BotReply {
 	var targetroom id.RoomID
 	var targetcommand string
 
-	if argc == 2 {
-		targetroom = room
-		targetcommand = argv[1]
-	} else if argc == 3 {
-		roomid, err := parseRoomID(argv[1])
+	if ca.argc == 2 {
+		targetroom = ca.room
+		targetcommand = ca.argv[1]
+	} else if ca.argc == 3 {
+		roomid, err := parseRoomID(ca.argv[1])
 		if err != nil || roomid == nil {
-			BotReplyMsg(cmdhdlr, statusroom, "Error parsing RoomID: " + err.Error() + ".")
-			return false
+			return BotPrintSimple(ca.statusroom, "Error parsing RoomID: " + err.Error() + ".")
 		}
 		targetroom = roomid.RoomID()
-		targetcommand = argv[2]
+		targetcommand = ca.argv[2]
 	} else {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
 	}
 
-	command, ok := cmdhdlr.allcommands[targetcommand]
-	if ok {
-		if cmdhdlr.hasUserRequiredPowerlevel(targetroom, sender, targetcommand, &command) {
-			//3. change the internal map powerlevel
-			delete(cmdhdlr.alloverrides[targetcommand], targetroom)
-			//4. publish the change to the userdata
-			cmdhdlr.savePowerLevelsOverrides()
-			//5. invalidate help text cache
-			cmdhdlr.invalidateHelpTextCacheForRoom(targetroom)
-			BotReplyMsg(cmdhdlr, statusroom, "Powerlevel for command >" + targetcommand + "< has been reset to its default >" + strconv.Itoa(command.RequiredPowerlevel) + "<.")
-		} else {
-			BotReplyMsg(cmdhdlr, statusroom, "You do not have permission to change the powerlevel of a command(" + 
-				strconv.Itoa(cmdhdlr.needsAtLeastPowerlevel(targetroom, targetcommand, &command)) + 
-				") with higher level than you(" + strconv.Itoa(cmdhdlr.userHasPowerlevel(targetroom, sender)) + ").")
-		}
-	} else {
-		BotReplyMsg(cmdhdlr, statusroom, "Command >"+targetcommand+"< not found.")
-		return false
+	command, ok := ca.cmdhdlr.allcommands[targetcommand]
+	if !ok {
+		return BotPrintSimple(ca.statusroom, "Command >"+targetcommand+"< not found.")
 	}
-	return true
+
+	if !ca.cmdhdlr.hasUserRequiredPowerlevel(targetroom, ca.sender, targetcommand, command.RequiredPowerlevel) {
+		return BotPrintSimple(ca.statusroom, "You do not have permission to change the powerlevel of a command(" + 
+			strconv.Itoa(ca.cmdhdlr.needsAtLeastPowerlevel(targetroom, targetcommand, command.RequiredPowerlevel)) + 
+			") with higher level than you(" + strconv.Itoa(ca.cmdhdlr.userHasPowerlevel(targetroom, ca.sender)) + ").")
+	}
+
+	//3. change the internal map powerlevel
+	delete(ca.cmdhdlr.alloverrides[targetcommand], targetroom)
+	//4. publish the change to the userdata
+	ca.cmdhdlr.savePowerLevelsOverrides()
+	//5. invalidate help text cache
+	ca.cmdhdlr.helptextcache.invalidateHelpTextCacheForRoom(targetroom)
+	return BotPrintSimple(ca.statusroom, "Powerlevel for command >" + targetcommand + "< has been reset to its default >" + strconv.Itoa(command.RequiredPowerlevel) + "<.")
 }
 
-func HandleCommandPowerlevelOverrideResetForAllCommandsInRoom(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	targetroom := room
-	if argc == 2 {
-		roomid, err := parseRoomID(argv[1])
+func HandleCommandPowerlevelOverrideResetForAllCommandsInRoom(ca CommandArgs) BotReply {
+	targetroom := ca.room
+	if ca.argc == 2 {
+		roomid, err := parseRoomID(ca.argv[1])
 		if err != nil || roomid == nil {
-			BotReplyMsg(cmdhdlr, statusroom, "Error parsing RoomID: " + err.Error() + ".")
-			return false
+			return BotPrintSimple(ca.statusroom, "Error parsing RoomID: " + err.Error() + ".")
 		}
 		targetroom = roomid.RoomID()
 	}
 
 	failedcommands := ""
-	for commandname, cmdint := range cmdhdlr.allcommands { 
-		if cmdhdlr.hasUserRequiredPowerlevel(targetroom, sender, commandname, &cmdint) {
+	for commandname, cmdint := range ca.cmdhdlr.allcommands { 
+		if ca.cmdhdlr.hasUserRequiredPowerlevel(targetroom, ca.sender, commandname, cmdint.RequiredPowerlevel) {
 			//3. change the internal map powerlevel
-			delete(cmdhdlr.alloverrides[commandname], targetroom)
+			delete(ca.cmdhdlr.alloverrides[commandname], targetroom)
 		} else {
-			_, exists := cmdhdlr.alloverrides[commandname][targetroom] // If we dont do that it gets spammy real quick
+			_, exists := ca.cmdhdlr.alloverrides[commandname][targetroom] // If we dont do that it gets spammy real quick
 			if exists {
 				failedcommands += commandname + ", "
 			}
 		}
 	}
 	//4. publish the change to the userdata
-	cmdhdlr.savePowerLevelsOverrides()
+	ca.cmdhdlr.savePowerLevelsOverrides()
 	//5. invalidate help text cache
-	cmdhdlr.invalidateHelpTextCacheForRoom(targetroom)
+	ca.cmdhdlr.helptextcache.invalidateHelpTextCacheForRoom(targetroom)
 
 	if failedcommands == "" {
-		BotReplyMsg(cmdhdlr, statusroom, "All command powerlevel overrides in the room have been reset to their defaults.")
+		return BotPrintSimple(ca.statusroom, "All command powerlevel overrides in the room have been reset to their defaults.")
 	} else {
 		failedcommands = strings.TrimSuffix(failedcommands, ", ") // Cope and Seethe Reader
-		BotReplyMsg(cmdhdlr, statusroom, "The following command powerlevel overrides in the room could not have been reset due to lack of permission: " + failedcommands)
+		return BotPrintSimple(ca.statusroom, "The following command powerlevel overrides in the room could not have been reset due to lack of permission: " + failedcommands)
 	}
-	return true
 }
 
 
-func (cmdhdlr *CommandHandler) needsAtLeastPowerlevel(targetroom id.RoomID, commandname string, command *commandsInternal) int {
+func (cmdhdlr *CommandHandler) needsAtLeastPowerlevel(targetroom id.RoomID, commandname string, requiredpowerlevel int) int {
 	overridepowerlevel, overrideexists := cmdhdlr.alloverrides[commandname][targetroom]
 	// When an override exists, the default is ignored
 	
@@ -194,13 +189,13 @@ func (cmdhdlr *CommandHandler) needsAtLeastPowerlevel(targetroom id.RoomID, comm
 		return overridepowerlevel
 	// Otherwise we check against the default
 	} else {
-		return command.RequiredPowerlevel
+		return requiredpowerlevel
 	}
 }
 
-func (cmdhdlr *CommandHandler) hasUserRequiredPowerlevel(targetroom id.RoomID, sender id.UserID, commandname string, command *commandsInternal) bool {
+func (cmdhdlr *CommandHandler) hasUserRequiredPowerlevel(targetroom id.RoomID, sender id.UserID, commandname string, requiredpowerlevel int) bool {
 	userpower, haspower := cmdhdlr.masters[targetroom][sender]
-	neededpowerlevel := cmdhdlr.needsAtLeastPowerlevel(targetroom, commandname, command)
+	neededpowerlevel := cmdhdlr.needsAtLeastPowerlevel(targetroom, commandname, requiredpowerlevel)
 	// When an override exists, the default is ignored
 	
 	if !haspower {
@@ -210,6 +205,7 @@ func (cmdhdlr *CommandHandler) hasUserRequiredPowerlevel(targetroom id.RoomID, s
 	if userpower > CommandAdmin {
 		userpower = CommandAdmin
 	}
+
 	if userpower >= neededpowerlevel {
 		return true
 	}
@@ -217,6 +213,7 @@ func (cmdhdlr *CommandHandler) hasUserRequiredPowerlevel(targetroom id.RoomID, s
 	if sender == cmdhdlr.botmaster {
 		return true
 	}
+	// You are too weak
 	return false
 }
 
@@ -224,13 +221,14 @@ func (cmdhdlr *CommandHandler) userHasPowerlevel(targetroom id.RoomID, sender id
 	userpower, haspower := cmdhdlr.masters[targetroom][sender]
 	if !haspower {
 		return 0
-	} else {
-		if sender != cmdhdlr.botmaster {
-			// Keep people from impersonating the botmaster
-			if userpower > 100 {
-				userpower = 100
-			}
-		}
-		return userpower
 	}
+
+	if sender != cmdhdlr.botmaster {
+		// Keep people from impersonating the botmaster
+		if userpower > 100 {
+			userpower = 100
+		}
+	}
+	
+	return userpower
 }

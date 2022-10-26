@@ -21,10 +21,10 @@ password_or_accesstoken: "DO NOT REDEEM THE ACCESSTOKEN ETHER"
 prefix: "!"
 
 # The bot display name
-device_display_name: "Safed Sundarata 1.9.0"
+device_display_name: "Safed Sundarata v2"
 
 # The identifier, useful to not spawn new sessons all the time
-unique_device_id: "SafedSundarata_1"
+unique_device_id: "SafedSundarata_2"
 
 # Master user who can do all the scary stuff
 master: "@biehdc:reactos.org"
@@ -34,11 +34,11 @@ events_channel: "!QXaaAzzzKxyoVVVxgV:sourceserver.at"
 
 # Set this to true if only the botmaster should be allowed to invite the bot to places
 # If false, people can invite the bot to any room.
-limit_invites: false
+limit_invites: true
 
 # The unique prefix for the account storage to make sure
 # no data collides if you run multiple instances on the same account
-accountstore_prefix: "org.safed_sundarata_1."
+accountstore_prefix: "org.safed_sundarata_2."
 
 
 # ===== Debug/Develop =====

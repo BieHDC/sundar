@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 	//"maunium.net/go/mautrix"
-	event "maunium.net/go/mautrix/event"
+	//event "maunium.net/go/mautrix/event"
 	id "maunium.net/go/mautrix/id"
 	"math"
 	"sort"
@@ -24,7 +24,7 @@ func helptextToCodeblock(unformatted string) string {
 func (cmdhdlr *CommandHandler) generateHelp(targetroom id.RoomID, powerlevel int) (string, string) {
 	types := make(map[string][]string)
 	for commandname, cmdint := range cmdhdlr.allcommands {
-		minpowerlevel := cmdhdlr.needsAtLeastPowerlevel(targetroom, commandname, &cmdint)
+		minpowerlevel := cmdhdlr.needsAtLeastPowerlevel(targetroom, commandname, cmdint.RequiredPowerlevel)
 		if powerlevel >= minpowerlevel {
 			appendee := "\t" + commandname + " -> " + cmdint.Description
 
@@ -63,65 +63,65 @@ func (cmdhdlr *CommandHandler) generateHelp(targetroom id.RoomID, powerlevel int
 }
 
 
-var helptextcache map[id.RoomID]map[int][2]string //room -> userpower -> helptext,helptext_formatted
-func (cmdhdlr *CommandHandler) getHelp(targetroom id.RoomID, powerlevel int) (string, string) {
-	if helptextcache == nil {
-		helptextcache = make(map[id.RoomID]map[int][2]string)
-	}
+type HelpTextCachePowerlevel map[int][2]string
+type HelpTextCache map[id.RoomID]HelpTextCachePowerlevel //room -> userpower -> helptext,helptext_formatted
+func NewHelpTextCache() HelpTextCache {
+	cache := make(HelpTextCache)
+	return cache
+}
 
-	cache, exists := helptextcache[targetroom][powerlevel]
+func (cmdhdlr *CommandHandler) getHelp(htc HelpTextCache, targetroom id.RoomID, powerlevel int) (string, string) {
+	cache, exists := htc[targetroom][powerlevel]
 	if exists {
 		return cache[0], cache[1]
 	} else {
 		helperstring, helperstring_formatted := cmdhdlr.generateHelp(targetroom, powerlevel)
-		if helptextcache[targetroom] == nil {
-			helptextcache[targetroom] = make(map[int][2]string)
+		if htc[targetroom] == nil {
+			htc[targetroom] = make(HelpTextCachePowerlevel)
 		}
-		helptextcache[targetroom][powerlevel] = [2]string{helperstring, helperstring_formatted}
+		htc[targetroom][powerlevel] = [2]string{helperstring, helperstring_formatted}
 		return helperstring, helperstring_formatted
 	}
 }
 
 
-func (cmdhdlr *CommandHandler) invalidateHelpTextCacheForRoom(targetroom id.RoomID) {
-	delete(helptextcache, targetroom)
+func (htc HelpTextCache) invalidateHelpTextCacheForRoom(targetroom id.RoomID) {
+	delete(htc, targetroom)
 }
 
-func (cmdhdlr *CommandHandler) invalidateHelpTextCacheForAll() {
-	helptextcache = make(map[id.RoomID]map[int][2]string)
+func (htc HelpTextCache) invalidateHelpTextCacheForAll() {
+	htc = make(HelpTextCache)
 }
 
-func printHelp(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
+func printHelp(ca CommandArgs) BotReply {
 	userpower := 0
-	if sender == cmdhdlr.botmaster {
+	if ca.sender == ca.cmdhdlr.botmaster {
 		userpower = math.MaxInt
 	} else {
-		userpower = cmdhdlr.masters[room][sender]
+		userpower = ca.cmdhdlr.masters[ca.room][ca.sender]
 	}
 
-	helperstring, helperstring_formatted := cmdhdlr.getHelp(room, userpower)
-	BotReplyMsgFormatted(cmdhdlr, statusroom, helperstring, helperstring_formatted)
-	return true
+	helperstring, helperstring_formatted := ca.cmdhdlr.getHelp(ca.cmdhdlr.helptextcache, ca.room, userpower)
+	return BotPrintFormatted(ca.statusroom, helperstring, helperstring_formatted)
 }
 
 
-func printUsage(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc < 2 {
+func printUsage(ca CommandArgs) BotReply {
+	if ca.argc < 2 {
 		// Print its own usage
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
 	} else {
 		// Print the requested commands usage
-		cmdhdlr.internelPrintUsage(argv[1], statusroom)
+		return BotPrintSimple(ca.statusroom, ca.cmdhdlr.getCommandUsage(ca.argv[1]))
 	}
-	return true
 }
 
 
-func (cmdhdlr *CommandHandler) internelPrintUsage(commandname string, roomid id.RoomID) {
+func (cmdhdlr *CommandHandler) getCommandUsage(commandname string) string {
 	command, ok := cmdhdlr.allcommands[commandname]
 	if ok {
-		BotReplyMsg(cmdhdlr, roomid, command.Usage)
+		return command.Usage
 	} else {
-		BotReplyMsg(cmdhdlr, roomid, "Command not found.")
+		return "Command not found."
 	}
 }

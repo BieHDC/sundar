@@ -3,7 +3,7 @@ package main
 import (
 	//"fmt"
 	//"maunium.net/go/mautrix"
-	event "maunium.net/go/mautrix/event"
+	//event "maunium.net/go/mautrix/event"
 	id "maunium.net/go/mautrix/id"
 	"strconv"
 	"time"
@@ -82,6 +82,7 @@ func (ss *ServerStatus) generateStatusMessage() string {
 		uptime_str = humaniseUptime(uptime) + "\n"
 	}
 
+	// Bot Uptime
 	uptimebot_str := humaniseUptime(uint64(time.Now().Unix() - ss.StartTime.Unix())) + "\n"
 
 	memory_str := ""
@@ -159,11 +160,26 @@ func (ss *ServerStatus) generateStatusMessage() string {
 	return finalstring
 }
 
-func HandleServerStatus(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	BotReplyMsg(cmdhdlr, room, cmdhdlr.serverstatus.generateStatusMessage())
-	return true
+
+func HandleServerStatusHandler(boottime time.Time) CommandCallback {
+	serverstatus := NewServerStatus()
+	if !boottime.IsZero() {
+		serverstatus.StartTime = boottime
+	}
+
+	return func(ca CommandArgs) BotReply {
+		return BotPrintSimple(ca.room, serverstatus.generateStatusMessage())
+	}
 }
 
-func CronServerStatus(cmdhdlr *CommandHandler) {
-	BotNotifyEventsChannel(cmdhdlr, cmdhdlr.serverstatus.generateStatusMessage())
+func CronServerStatusHandler(cmdhdlr *CommandHandler, boottime time.Time, room id.RoomID) func() {
+	serverstatus := NewServerStatus()
+	if !boottime.IsZero() {
+		serverstatus.StartTime = boottime
+	}
+	targetroom := room
+
+	return func() {
+		cmdhdlr.BotPrint(BotPrintSimple(targetroom, serverstatus.generateStatusMessage()))
+	}
 }

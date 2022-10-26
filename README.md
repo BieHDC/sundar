@@ -7,7 +7,7 @@ Safed Sundarata, or in short Sundar, is a Matrix bot with a big variety of funct
 Copy `config.yaml.example` and edit it's content with your data and preferences.
 ```go
 go build
-./biehdc.safed_sundarata -config config.yaml
+./biehdc.safed_sundarata -config config.yaml -echos echos/echos.json
  ```
 Invite the bot, like you would invite any other user, into the rooms it should exist in.
 It will then introduce itself and i suggest you run the `help` command to find out what it can do.
@@ -16,6 +16,7 @@ It will then introduce itself and i suggest you run the `help` command to find o
 ## Features
 ### Commands
 #### Custom Commands
+- `err` same as error.
 - `error` convers a Windows Error Message Code to a human readable string.
 - `dj` tells a dadjoke.
 - `quote` tells a quote.
@@ -23,6 +24,7 @@ It will then introduce itself and i suggest you run the `help` command to find o
 - `hi` greet the bot.
 - `guess` simple guess the number game.
 - `status` shows stats about your server.
+- `ddg` searches the provided words or when used as a reply to another message it searches these words.
 
 #### Builtin Commands
 - `help` displays all commands you are *allowed to* run, meaning the output depends on your powerlevel.
@@ -32,11 +34,7 @@ It will then introduce itself and i suggest you run the `help` command to find o
 - `reboot` you can guess that one.
 - `botinfo` prints the same greeting message as it does when joining a room.
 
-- `echoadd` adds a command that just repeats a message you give it. Useful for explanations that repeat often and etc.
-- `echodel` removes it.
-
 - `setdisplayname/setavatar` to globally set the bots appearance.
-- `setbotroomappearance` to set the appearance in a room only.
 
 - `poweroverride[reset[all]]` to override the powerlevel required for a command per room and reset them.
 - `blockcommand` is just a shortcut for `poweroverride` with a powerlevel of 100.
@@ -45,7 +43,7 @@ It will then introduce itself and i suggest you run the `help` command to find o
 - `leaveemptyrooms` to make the bot leave rooms it is alone in.
 - `broadcast` broadcasts a message to all joined rooms.
 
-- `cluster` and it's subcommands to run commands against a cluster of rooms.
+- `roomlistcommand` and it's subcommands to run commands against a cluster of rooms.
 - `say` is meant to be combined with `cluster cmd` to broadcast a message in a room cluster.
 
 

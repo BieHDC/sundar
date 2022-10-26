@@ -9,206 +9,219 @@ import (
 	"sync"
 )
 
+type functionStatus int
 const (
-	StatusUnknown   int = 0
-	StatusBlacklist int = 1
-	StatusWhitelist int = 2
+	StatusUnknown functionStatus = iota
+	StatusBlacklist
+	StatusWhitelist
 )
 
-type FunctionRegisterPrototype func(*CommandHandler, id.RoomID, id.UserID, int, []string, *event.Event)
+type FunctionRegisterPrototype func(*CommandHandler, id.RoomID, id.UserID, int, []string, *event.Event) BotReply
 
 type FunctionRegister struct {
 	allfunctions 			map[string]FunctionRegisterPrototype
-	functionstatus 			map[string]int
+	functionstatus 			map[string]functionStatus
 	Functionrooms 			map[string][]id.RoomID
 	func_register_mutex 	sync.Mutex
 }
 
 //AccountStorage will take care of caching
 func saveFunctionstatus(cmdhdlr *CommandHandler, funcregister *FunctionRegister) {
-    cmdhdlr.StoreData("funcregister_2", funcregister)
+    cmdhdlr.accountstore.StoreData(cmdhdlr.client, "funcregister_2", funcregister)
 }
 
 func loadFunctionstatus(cmdhdlr *CommandHandler, funcregister *FunctionRegister) {
-    cmdhdlr.FetchData("funcregister_2", funcregister)
+    cmdhdlr.accountstore.FetchData(cmdhdlr.client, "funcregister_2", funcregister)
 }
 
 func NewDefaultFunctionRegister() *FunctionRegister {
 	return &FunctionRegister{
 		allfunctions: 	make(map[string]FunctionRegisterPrototype),
-		functionstatus:	make(map[string]int),
+		functionstatus:	make(map[string]functionStatus),
 		Functionrooms:	make(map[string][]id.RoomID),
 	}
 }
 
-func (cmdhdlr* CommandHandler) AddFunction(functionid string, status int, targetfunction FunctionRegisterPrototype) {
+
+func (freg *FunctionRegister) InvokeFunctions(ca CommandArgs) {
+	for fregname, fregfun := range freg.allfunctions {
+		has_entry := false
+		functionrooms, exists := freg.Functionrooms[fregname]
+		if exists {
+			for _, roomlistentry := range functionrooms {
+				if roomlistentry == ca.room {
+					has_entry = true
+					break
+				}
+			}
+		}
+
+		// If the function is whitelist based and has an entry OR the function is blacklist based and doesnt have an entry -> exec
+		if ((freg.functionstatus[fregname] == StatusWhitelist) && has_entry) || ((freg.functionstatus[fregname] == StatusBlacklist) && !has_entry) {
+			ca.cmdhdlr.BotPrint(fregfun(ca.cmdhdlr, ca.room, ca.sender, ca.argc, ca.argv, ca.evt))
+		}
+	}
+}
+
+
+func (cmdhdlr* CommandHandler) AddFunction(functionid string, status functionStatus, targetfunction FunctionRegisterPrototype) {
 	cmdhdlr.funcregister.allfunctions[functionid] = targetfunction
 	cmdhdlr.funcregister.functionstatus[functionid] = status
 }
 
 
-func HandleFunctionWipeRoomlist(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	cmdhdlr.funcregister.func_register_mutex.Lock()
-	defer cmdhdlr.funcregister.func_register_mutex.Unlock()
-	
-	if argc < 2 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
-	} else {
-		_, exists := cmdhdlr.funcregister.allfunctions[argv[1]]
-		if !exists {
-			BotReplyMsg(cmdhdlr, statusroom, "The function >" + argv[1] + "< does not exist.")
-			return false
-		}
-
-		newroomlist := []id.RoomID{}
-		cmdhdlr.funcregister.Functionrooms[argv[1]] = newroomlist
-		saveFunctionstatus(cmdhdlr, cmdhdlr.funcregister)
-
-		BotReplyMsg(cmdhdlr, statusroom, "The roomlist for the function >" + argv[1] + "< has been deleted.")
-		return true
+func HandleFunctionWipeRoomlist(ca CommandArgs) BotReply {
+	if ca.argc < 2 {
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
 	}
+
+	ca.cmdhdlr.funcregister.func_register_mutex.Lock()
+	defer ca.cmdhdlr.funcregister.func_register_mutex.Unlock()
+	
+	_, exists := ca.cmdhdlr.funcregister.allfunctions[ca.argv[1]]
+	if !exists {
+		return BotPrintSimple(ca.statusroom, "The function >" + ca.argv[1] + "< does not exist.")
+	}
+
+	newroomlist := []id.RoomID{}
+	ca.cmdhdlr.funcregister.Functionrooms[ca.argv[1]] = newroomlist
+	saveFunctionstatus(ca.cmdhdlr, ca.cmdhdlr.funcregister)
+
+	return BotPrintSimple(ca.statusroom, "The roomlist for the function >" + ca.argv[1] + "< has been deleted.")
 }
 
-func HandleFunctionStatusInRoom(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	cmdhdlr.funcregister.func_register_mutex.Lock()
-	defer cmdhdlr.funcregister.func_register_mutex.Unlock()
+func HandleFunctionStatusInRoom(ca CommandArgs) BotReply {
+	if ca.argc < 3 {
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
+	}
 	
-	if argc < 3 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
+	// argv 1 -> functionid
+	// argv 2 -> enable/disable
+	// argv 3 -> roomid
+	var targetroom_str string
+	if ca.argv[3] == "this" {
+		targetroom_str = ca.room.String()
 	} else {
-		// argv 1 -> functionid
-		// argv 2 -> enable/disable
-		// argv 3 -> roomid
-		var targetroom_str string
-		if argv[3] == "this" {
-			targetroom_str = room.String()
-		} else {
-			targetroom_str = argv[3]
-		}
+		targetroom_str = ca.argv[3]
+	}
 
-		targetroom, err := parseRoomID(targetroom_str)
-		if err != nil || targetroom == nil {
-    		BotReplyMsg(cmdhdlr, statusroom, "Invalid RoomID.")
-			return false
-		}
+	targetroom, err := parseRoomID(targetroom_str)
+	if err != nil || targetroom == nil {
+		return BotPrintSimple(ca.statusroom, "Invalid RoomID.")
+	}
 
-		if !(cmdhdlr.userHasPowerlevel(targetroom.RoomID(), sender) >= CommandAdmin) {
-			BotReplyMsg(cmdhdlr, statusroom, "You need to be an Administrator in >" + targetroom.String() + "< to block functions.")
-			return true
-		}
+	if !(ca.cmdhdlr.userHasPowerlevel(targetroom.RoomID(), ca.sender) >= CommandAdmin) {
+		return BotPrintSimple(ca.statusroom, "You need to be an Administrator in >" + targetroom.String() + "< to block functions.")
+	}
 
-		newstate := false
-		if argv[2] == "enable" {
-			newstate = true
-		} else if argv[2] == "disable" {
-			newstate = false
-		} else {
-    		BotReplyMsg(cmdhdlr, statusroom, "New State must be <enable> or <disable>.")
-			return false
-		}
+	newstate := false
+	if ca.argv[2] == "enable" {
+		newstate = true
+	} else if ca.argv[2] == "disable" {
+		newstate = false
+	} else {
+		return BotPrintSimple(ca.statusroom, "New State must be <enable> or <disable>.")
+	}
 
-		_, exists := cmdhdlr.funcregister.allfunctions[argv[1]]
-		if !exists {
-			BotReplyMsg(cmdhdlr, statusroom, "The function >" + argv[1] + "< does not exist.")
-			return false
-		}
+	ca.cmdhdlr.funcregister.func_register_mutex.Lock()
+	defer ca.cmdhdlr.funcregister.func_register_mutex.Unlock()
 
-		functionstatus := cmdhdlr.funcregister.functionstatus[argv[1]]
-		finalstatus := "Undefined, should not happen. Report to dev if it does!"
-		// blacklist & enable -> remove from room list
-		// whitelist & disable -> remove from room list
-		if ((functionstatus == StatusBlacklist) && (newstate == true)) || ((functionstatus == StatusWhitelist) && (newstate == false)) {
-			var newroomlist []id.RoomID
-			// Check if the room is in the list
-			roomfound := false
-			functionrooms, exists := cmdhdlr.funcregister.Functionrooms[argv[1]]
-			if exists {
-				for _, roomlistentry := range functionrooms {
-					if roomlistentry == targetroom.RoomID() {
-						roomfound = true
-					} else {
-						// Append rooms that are not the target
-						newroomlist = append(newroomlist, roomlistentry)
-					}
-				}
-			}
+	_, exists := ca.cmdhdlr.funcregister.allfunctions[ca.argv[1]]
+	if !exists {
+		return BotPrintSimple(ca.statusroom, "The function >" + ca.argv[1] + "< does not exist.")
+	}
 
-			if roomfound {
-				oldfunctionrooms := cmdhdlr.funcregister.Functionrooms[argv[1]]
-				oldfunctionrooms = newroomlist
-				cmdhdlr.funcregister.Functionrooms[argv[1]] = oldfunctionrooms
-
-				if functionstatus == StatusBlacklist {
-					finalstatus = "Function >" + argv[1] + "< has been unblocked in >" + targetroom.String() + "<."
+	functionstatus := ca.cmdhdlr.funcregister.functionstatus[ca.argv[1]]
+	finalstatus := "Undefined, should not happen. Report to dev if it does!"
+	// blacklist & enable -> remove from room list
+	// whitelist & disable -> remove from room list
+	if ((functionstatus == StatusBlacklist) && (newstate == true)) || ((functionstatus == StatusWhitelist) && (newstate == false)) {
+		var newroomlist []id.RoomID
+		// Check if the room is in the list
+		roomfound := false
+		functionrooms, exists := ca.cmdhdlr.funcregister.Functionrooms[ca.argv[1]]
+		if exists {
+			for _, roomlistentry := range functionrooms {
+				if roomlistentry == targetroom.RoomID() {
+					roomfound = true
 				} else {
-					finalstatus = "Function >" + argv[1] + "< has been blocked in >" + targetroom.String() + "<."
-				}
-			} else {
-				//we didnt have to do anything anyway
-				if functionstatus == StatusBlacklist {
-					finalstatus = "Function >" + argv[1] + "< was not blocked in >" + targetroom.String() + "<."
-				} else {
-					finalstatus = "Function >" + argv[1] + "< was already blocked in >" + targetroom.String() + "<."
-				}
-				BotReplyMsg(cmdhdlr, statusroom, finalstatus)
-				return true
-			}
-
-		// blacklist & disable -> add to room list
-		// whitelist & enable -> add to room list
-		} else if ((functionstatus == StatusBlacklist) && (newstate == false)) || ((functionstatus == StatusWhitelist) && (newstate == true)) {
-			// Check if its not already in the list
-			functionrooms, exists := cmdhdlr.funcregister.Functionrooms[argv[1]]
-			if exists {
-				for _, roomlistentry := range functionrooms {
-					if roomlistentry == targetroom.RoomID() {
-						// if its already in the list, we are done and can exit cleanly
-						if functionstatus == StatusBlacklist {
-							finalstatus = "Function >" + argv[1] + "< was already blocked in >" + targetroom.String() + "<."
-						} else {
-							finalstatus = "Function >" + argv[1] + "< was already unblocked in >" + targetroom.String() + "<."
-						}
-						BotReplyMsg(cmdhdlr, statusroom, finalstatus)
-						return true
-					}
+					// Append rooms that are not the target
+					newroomlist = append(newroomlist, roomlistentry)
 				}
 			}
+		}
 
-			// Otherwise add it
-			oldfunctionrooms := cmdhdlr.funcregister.Functionrooms[argv[1]]
-			oldfunctionrooms = append(oldfunctionrooms, targetroom.RoomID())
-			cmdhdlr.funcregister.Functionrooms[argv[1]] = oldfunctionrooms
+		if roomfound {
+			ca.cmdhdlr.funcregister.Functionrooms[ca.argv[1]] = newroomlist
+
 			if functionstatus == StatusBlacklist {
-				finalstatus = "Function >" + argv[1] + "< has been blocked in >" + targetroom.String() + "<."
+				finalstatus = "Function >" + ca.argv[1] + "< has been unblocked in >" + targetroom.String() + "<."
 			} else {
-				finalstatus = "Function >" + argv[1] + "< has been unblocked in >" + targetroom.String() + "<."
+				finalstatus = "Function >" + ca.argv[1] + "< has been blocked in >" + targetroom.String() + "<."
+			}
+			saveFunctionstatus(ca.cmdhdlr, ca.cmdhdlr.funcregister)
+			return BotPrintSimple(ca.statusroom, finalstatus)
+		} else {
+			//we didnt have to do anything anyway
+			if functionstatus == StatusBlacklist {
+				finalstatus = "Function >" + ca.argv[1] + "< was not blocked in >" + targetroom.String() + "<."
+			} else {
+				finalstatus = "Function >" + ca.argv[1] + "< was already blocked in >" + targetroom.String() + "<."
+			}
+			return BotPrintSimple(ca.statusroom, finalstatus)
+		}
+
+	// blacklist & disable -> add to room list
+	// whitelist & enable -> add to room list
+	} else if ((functionstatus == StatusBlacklist) && (newstate == false)) || ((functionstatus == StatusWhitelist) && (newstate == true)) {
+		// Check if its not already in the list
+		functionrooms, exists := ca.cmdhdlr.funcregister.Functionrooms[ca.argv[1]]
+		if exists {
+			for _, roomlistentry := range functionrooms {
+				if roomlistentry == targetroom.RoomID() {
+					// if its already in the list, we are done and can exit cleanly
+					if functionstatus == StatusBlacklist {
+						finalstatus = "Function >" + ca.argv[1] + "< was already blocked in >" + targetroom.String() + "<."
+					} else {
+						finalstatus = "Function >" + ca.argv[1] + "< was already unblocked in >" + targetroom.String() + "<."
+					}
+					return BotPrintSimple(ca.statusroom, finalstatus)
+				}
 			}
 		}
 
-		// If we got this far, we have to save
-		saveFunctionstatus(cmdhdlr, cmdhdlr.funcregister)
+		// Otherwise add it
+		oldfunctionrooms := ca.cmdhdlr.funcregister.Functionrooms[ca.argv[1]]
+		oldfunctionrooms = append(oldfunctionrooms, targetroom.RoomID())
+		ca.cmdhdlr.funcregister.Functionrooms[ca.argv[1]] = oldfunctionrooms
+		if functionstatus == StatusBlacklist {
+			finalstatus = "Function >" + ca.argv[1] + "< has been blocked in >" + targetroom.String() + "<."
+		} else {
+			finalstatus = "Function >" + ca.argv[1] + "< has been unblocked in >" + targetroom.String() + "<."
+		}
+		saveFunctionstatus(ca.cmdhdlr, ca.cmdhdlr.funcregister)
+		return BotPrintSimple(ca.statusroom, finalstatus)
 
-		BotReplyMsg(cmdhdlr, statusroom, finalstatus)
+	// I cant think if a case this might happen, but that doesnt mean it couldnt
+	} else {
+		return BotPrintSimple(ca.statusroom, "SOMETHING WENT VERY WRONG IN THE FUNCTION REGISTER, REPORT TO DEV FOR INSPECTION!")
 	}
-	return true
 }
 
 
-func HandleListKnownFunctions(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
+func HandleListKnownFunctions(ca CommandArgs) BotReply {
 	list := "Registered Functions: "
-    if len(cmdhdlr.funcregister.allfunctions) > 0 {
+    if len(ca.cmdhdlr.funcregister.allfunctions) > 0 {
     	list += "\n"
-	    for fregname, _ := range cmdhdlr.funcregister.allfunctions {
+	    for fregname, _ := range ca.cmdhdlr.funcregister.allfunctions {
 	    	list += "\t" + fregname
-	    	if cmdhdlr.funcregister.functionstatus[fregname] == StatusBlacklist {
+	    	if ca.cmdhdlr.funcregister.functionstatus[fregname] == StatusBlacklist {
 	    		list += " -> Blacklist: "
 	    	} else {
 	    		list += " -> Whitelist: "
 	    	}
-	    	if len(cmdhdlr.funcregister.Functionrooms[fregname]) > 0 {
-		    	for _, targetroom := range cmdhdlr.funcregister.Functionrooms[fregname] {
+	    	if len(ca.cmdhdlr.funcregister.Functionrooms[fregname]) > 0 {
+		    	for _, targetroom := range ca.cmdhdlr.funcregister.Functionrooms[fregname] {
 		    		list += targetroom.String() + " "
 		    	}
 	    	} else {
@@ -219,27 +232,6 @@ func HandleListKnownFunctions(cmdhdlr *CommandHandler, room id.RoomID, sender id
 	} else {
 		list += "None"
 	}
-    BotReplyMsg(cmdhdlr, statusroom, list)
-	return true
+
+    return BotPrintSimple(ca.statusroom, list)
 }
-
-
-func (freg *FunctionRegister) InvokeFunctions(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, evt *event.Event) {
-	for fregname, fregfun := range freg.allfunctions {
-		has_entry := false
-		functionrooms, exists := freg.Functionrooms[fregname]
-		if exists {
-			for _, roomlistentry := range functionrooms {
-				if roomlistentry == room {
-					has_entry = true
-					break
-				}
-			}
-		}
-		// If the function is whitelist based and has an entry OR the function is blacklist based and doesnt have an entry -> exec
-		if ((freg.functionstatus[fregname] == StatusWhitelist) && has_entry) || ((freg.functionstatus[fregname] == StatusBlacklist) && !has_entry) {
-			fregfun(cmdhdlr, room, sender, argc, argv, evt)
-		}
-	}
-}
-

@@ -2,235 +2,150 @@ package main
 
 import (
 	//"maunium.net/go/mautrix"
-	event "maunium.net/go/mautrix/event"
+	//event "maunium.net/go/mautrix/event"
 	id "maunium.net/go/mautrix/id"
 	"strconv"
-	"time"
 	"strings"
 )
 
-func botJoinRoom(cmdhdlr *CommandHandler, targetroom id.RoomID) bool {
-	_, err := cmdhdlr.client.JoinRoomByID(targetroom)
+func HandleBotForceJoinRoom(ca CommandArgs) BotReply {
+	if ca.argc < 2 {
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
+	}
+
+	targetroom, err := parseRoomID(ca.argv[1])
 	if err != nil {
-		BotNotifyEventsChannel(cmdhdlr, "Join Event Error 1 for room >"+targetroom.String()+"<:"+err.Error())
-		return false
+		return BotPrintSimple(ca.statusroom, "Invalid RoomID.")
+	}
+
+	success, err := botJoinRoom(ca.cmdhdlr, targetroom.RoomID())
+	if success {
+		return BotPrintSimple(ca.statusroom, "Joining Room >"+targetroom.String()+"<.")
 	} else {
-		cmdhdlr.join_room_event(targetroom)
-		BotNotifyEventsChannel(cmdhdlr, "Join Event Success:"+targetroom.String())
-		return true
+		return BotPrintSimple(ca.statusroom, err.Error())
 	}
 }
 
-func HandleBotForceJoinRoom(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc < 2 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
-	} else {
-		targetroom, err := parseRoomID(argv[1])
-		if err == nil && targetroom != nil {
-			BotReplyMsg(cmdhdlr, statusroom, "Joining Room >"+targetroom.String()+"<.")
-			botJoinRoom(cmdhdlr, targetroom.RoomID())
-		} else {
-			BotReplyMsg(cmdhdlr, statusroom, "Invalid RoomID.")
-			return false
-		}
+func HandleBotForceLeaveRoom(ca CommandArgs) BotReply {
+	if ca.argc < 2 {
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
 	}
-	return true
-}
 
-func botLeaveRoom(cmdhdlr *CommandHandler, targetroom id.RoomID) {
-	// You first need to leave it before you can forget it
-	_, err := cmdhdlr.client.LeaveRoom(targetroom)
+	var targetroom_str string
+	if ca.argv[1] == "this" {
+		targetroom_str = ca.room.String()
+	} else {
+		targetroom_str = ca.argv[1]
+	}
+	targetroom, err := parseRoomID(targetroom_str)
 	if err != nil {
-		BotNotifyEventsChannel(cmdhdlr, "botLeaveRoom Error 1:"+err.Error())
+		return BotPrintSimple(ca.statusroom, "Invalid RoomID.")
 	}
-	time.Sleep(1 * time.Second)
-	_, err = cmdhdlr.client.ForgetRoom(targetroom)
-	if err != nil {
-		BotNotifyEventsChannel(cmdhdlr, "botLeaveRoom Error 2:"+err.Error())
-	}
-	time.Sleep(1 * time.Second)
-}
 
-func HandleBotForceLeaveRoom(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc < 2 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
+	if !(ca.cmdhdlr.userHasPowerlevel(targetroom.RoomID(), ca.sender) >= CommandAdmin) {
+		return BotPrintSimple(ca.statusroom, "You need to be an Administrator in >" + targetroom.String() + "< to kick the bot.")
+	}
+
+	success, err := botLeaveRoom(ca.cmdhdlr, targetroom.RoomID())
+	if success {
+		return BotPrintSimple(ca.statusroom, "Leaving room "+targetroom.String())
 	} else {
-		var targetroom_str string
-		if argv[1] == "this" {
-			targetroom_str = room.String()
-		} else {
-			targetroom_str = argv[1]
-		}
-
-		targetroom, err := parseRoomID(targetroom_str)
-		if err == nil && targetroom != nil {
-			if cmdhdlr.userHasPowerlevel(targetroom.RoomID(), sender) >= CommandAdmin {
-				BotNotifyEventsChannel(cmdhdlr, "Leaving room "+targetroom.String())
-				botLeaveRoom(cmdhdlr, targetroom.RoomID())
-			} else {
-				BotReplyMsg(cmdhdlr, statusroom, "You need to be an Administrator in >" + targetroom.String() + "< to kick the bot.")
-			}
-		} else {
-			BotNotifyEventsChannel(cmdhdlr, "Error leaving room "+err.Error())
-			BotReplyMsg(cmdhdlr, statusroom, "Invalid RoomID.")
-			return false
-		}
+		return BotPrintSimple(ca.statusroom, err.Error())
 	}
-	return true
 }
 
-func HandleBotLeaveEmptyRooms(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
+func HandleBotLeaveEmptyRooms(ca CommandArgs) BotReply {
 	left_rooms_count := 0
-	joinedrooms, err := cmdhdlr.client.JoinedRooms()
+	joinedrooms, err := ca.cmdhdlr.client.JoinedRooms()
 	if err != nil {
-		BotNotifyEventsChannel(cmdhdlr, "HandleBotLeaveEmptyRooms Error 1:"+err.Error())
-		return false
-	} else {
-		for _, targetroom := range joinedrooms.JoinedRooms {
-			joinedusers, err := cmdhdlr.client.JoinedMembers(targetroom)
-			if err != nil {
-				BotNotifyEventsChannel(cmdhdlr, "HandleBotLeaveEmptyRooms Error 2:"+err.Error())
-			} else {
-				if len(joinedusers.Joined) <= 1 {
-					botLeaveRoom(cmdhdlr, targetroom)
-					left_rooms_count++
-				}
-			}
-		}
+		return BotPrintSimple(ca.statusroom, "HandleBotLeaveEmptyRooms Error 1:"+err.Error())
 	}
-	BotReplyMsg(cmdhdlr, statusroom, "Left "+strconv.Itoa(left_rooms_count)+" Rooms")
-	return true
-}
 
-func HandleBotBroadcastMessage(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc < 2 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
-	} else {
-		joinedrooms, err := cmdhdlr.client.JoinedRooms()
+	var errorsfromleave []string
+	for _, targetroom := range joinedrooms.JoinedRooms {
+		joinedusers, err := ca.cmdhdlr.client.JoinedMembers(targetroom)
 		if err != nil {
-			BotNotifyEventsChannel(cmdhdlr, "HandleBotBroadcastMessage Error 1:"+err.Error())
-		} else {
-			for _, targetroom := range joinedrooms.JoinedRooms {
-				_, err := cmdhdlr.client.SendNotice(targetroom, argv[1])
-				if err != nil {
-					BotNotifyEventsChannel(cmdhdlr, "HandleBotBroadcastMessage Error 2:"+err.Error())
-				}
+			errorsfromleave = append(errorsfromleave, "HandleBotLeaveEmptyRooms Error 2:"+err.Error())
+			continue
+		}
+
+		if len(joinedusers.Joined) <= 1 {
+			success, err := botLeaveRoom(ca.cmdhdlr, targetroom)
+			if !success {
+				errorsfromleave = append(errorsfromleave, err.Error())
+			} else {
+				left_rooms_count++
 			}
 		}
 	}
-	return true
-}
 
-// Goodie for Clusters
-func HandleBotSayMessage(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc < 2 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
-	} else {
-		BotReplyMsgPinged(cmdhdlr, sender, room, "", " says: " + strings.Join(argv[1:], " "))
+	errorsformatted := "The folloing errors have occurred while leaving:\n"
+	if len(errorsfromleave) > 0 {
+		for _, errs := range errorsfromleave {
+			errorsformatted += errs + "\n"
+		}
+		return BotPrintSimple(ca.statusroom, "Left "+strconv.Itoa(left_rooms_count)+" Rooms\n" + errorsformatted)
 	}
-	return true
+
+	return BotPrintSimple(ca.statusroom, "Left "+strconv.Itoa(left_rooms_count)+" Rooms")
 }
 
-func HandleSetDisplayName(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc < 2 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
-	} else {
-		err := cmdhdlr.client.SetDisplayName(argv[1])
+func HandleBotBroadcastMessage(ca CommandArgs) BotReply {
+	if ca.argc < 2 {
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
+	}
+
+	joinedrooms, err := ca.cmdhdlr.client.JoinedRooms()
+	if err != nil {
+		return BotPrintSimple(ca.statusroom, "HandleBotBroadcastMessage Error 1:"+err.Error())
+	}
+
+	chain := BotPrintNothing()
+	message := strings.Join(ca.argv[1:], " ")
+	for _, targetroom := range joinedrooms.JoinedRooms {
+		roommsg := BotPrintSimple(targetroom, message)
+		BotPrintAppend(&chain, &roommsg)
+	}
+
+	return chain
+}
+
+func HandleSetDisplayName(ca CommandArgs) BotReply {
+	if ca.argc < 2 {
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
+	}
+
+	err := ca.cmdhdlr.client.SetDisplayName(strings.Join(ca.argv[1:], " "))
+	if err != nil {
+		return BotPrintSimple(ca.statusroom, "HandleSetDisplayName Error:"+err.Error())
+	}
+
+	return BotPrintSimple(ca.statusroom, "Successfully set displayname")
+}
+
+func HandleSetAvatar(ca CommandArgs) BotReply {
+	if ca.argc != 2 {
+		return BotPrintSimple(ca.statusroom, ca.self.Usage)
+	}
+
+	// Clear Profile Picture
+	if ca.argv[1] == "clear" {
+		err := ca.cmdhdlr.client.SetAvatarURL(id.ContentURI{})
 		if err != nil {
-			BotNotifyEventsChannel(cmdhdlr, "HandleSetDisplayName Error:"+err.Error())
+			return BotPrintSimple(ca.statusroom, "HandleSetAvatar Error 1:"+err.Error())
 		}
+		return BotPrintSimple(ca.statusroom, "Cleared profile picture")
 	}
-	return true
-}
 
-func HandleSetAvatar(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc == 2 {
-		// Clear Profile Picture
-		if argv[1] == "clear" {
-			err := cmdhdlr.client.SetAvatarURL(id.ContentURI{})
-			if err != nil {
-				BotNotifyEventsChannel(cmdhdlr, "HandleSetAvatar Error 1:"+err.Error())
-				return false
-			}
-		} else {
-		// Set Profile Picture to URI
-			contenturi, err := id.ParseContentURI(argv[1])
-			if err != nil {
-				BotNotifyEventsChannel(cmdhdlr, "HandleSetAvatar Error 2:"+err.Error())
-				return false
-			} else {
-				err = cmdhdlr.client.SetAvatarURL(contenturi)
-				if err != nil {
-					BotNotifyEventsChannel(cmdhdlr, "HandleSetAvatar Error 3:"+err.Error())
-					return false
-				}
-			}
-		}
-	} else {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
+	// Set Profile Picture to URI
+	contenturi, err := id.ParseContentURI(ca.argv[1])
+	if err != nil {
+		return BotPrintSimple(ca.statusroom, "HandleSetAvatar Error 2:"+err.Error())
 	}
-	return true
-}
-
-func HandleSetBotRoomAppearance(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, statusroom id.RoomID, evt *event.Event) bool {
-	if argc < 3 {
-		cmdhdlr.internelPrintUsage(argv[0], statusroom)
-		return false
-	} else {
-		var targetroom_str string
-		if argv[1] == "this" {
-			targetroom_str = room.String()
-		} else {
-			targetroom_str = argv[1]
-		}
-
-		targetroom, err := parseRoomID(targetroom_str)
-		if err == nil && targetroom != nil {
-			if cmdhdlr.userHasPowerlevel(targetroom.RoomID(), sender) >= CommandAdmin {
-				var profilepicture id.ContentURIString
-				// Clear Profile Picture
-				if argv[2] == "clear" {
-					profilepicture = ""
-				// New Profile Picture
-				} else {
-					contenturi, err := id.ParseContentURI(argv[2])
-					if err != nil {
-						BotReplyMsg(cmdhdlr, statusroom, "Invalid Content URI.")
-						return false
-					}
-					profilepicture = contenturi.CUString()
-				}
-
-				newname := "" //if its left empty its going to reset
-				if argc < 4 { 
-					newname = strings.Join(argv[3:], " ") //otherwise we join the rest together as name
-				}
-
-				membershipevent := event.MemberEventContent{
-					Membership:  event.MembershipJoin,
-					Displayname: newname,
-					AvatarURL:   profilepicture,
-				}
-				_, err := cmdhdlr.client.SendStateEvent(room, event.StateMember, cmdhdlr.client.UserID.String(), membershipevent)
-				if err != nil {
-					BotReplyMsg(cmdhdlr, statusroom, "HandleSetBotRoomAppearance Error:"+err.Error())
-				} else {
-					BotReplyMsg(cmdhdlr, statusroom, "New Bot Room appearance has been set.")
-				}
-			} else {
-				BotReplyMsg(cmdhdlr, statusroom, "You need to be an Administrator in >" + targetroom.String() + "< to change the bot appearance.")
-			}
-		} else {
-			BotNotifyEventsChannel(cmdhdlr, "Error leaving room "+err.Error())
-			BotReplyMsg(cmdhdlr, statusroom, "Invalid RoomID.")
-			return false
-		}
+	err = ca.cmdhdlr.client.SetAvatarURL(contenturi)
+	if err != nil {
+		return BotPrintSimple(ca.statusroom, "HandleSetAvatar Error 3:"+err.Error())
 	}
-	return true
+
+	return BotPrintSimple(ca.statusroom, "Successfully set profile picture")
 }
