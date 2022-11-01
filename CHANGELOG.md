@@ -1,7 +1,11 @@
 # Changelog
 ---
 
-## Version 2
+## Version 2.1.0
+- The `BotPrint*` commands now have modifiers for `WithReply` and `WithNoBridge` instead of being dedicated functions to allow better flexibility.
+- `WithNoBridge` implements an unofficial non-spec which adds `com.cernodile.nobridge,omitempty` to every `m.room.message`->`m.notice`->`content` when set which hints to bridge bots who implement it that the message should not be bridged to the other side.
+
+## Version 2.0.0
 - You can now soft stop the bot with one ctrl+c and force stop it if you press ctrl+c a second time in case it hangs. Can happen when the homeserver goes down and such things.
 - Removed the `cluster` system and instead provide a `roomlistcommand`. Usage is simply `roomlistcommand room1,room2,room3 thecommand args`. It was barely used and had little value for the amount of code it created.
 - Added a function to replace youtube short links with a normal watch link, and optionally reply with a link to a piped instance. (its just a url replace)
@@ -23,5 +27,5 @@ When you are done, run the `main.go` file like `go run main.go -in echos.csv -ou
 
 
 ---
-## Version 1
+## Version 1.0.0
  - Initial testing version.

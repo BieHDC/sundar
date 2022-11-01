@@ -143,6 +143,8 @@ func main() {
 	cmdhdlr.AddCommand("god", 	"Ask God for advice", 	"<your words>", "Fun", 	 CommandAnyone, HandleGod)
 	cmdhdlr.AddCommand("hi", 	"Say Hi to the bot", 	"", 			"Misc",  CommandAnyone, HandleHello)
 	cmdhdlr.AddCommand("guess", "Guess the number", 	"<number>", 	"Games", CommandAnyone, HandleGuessHandler())
+	// !!TESTING!!
+	cmdhdlr.AddCommand("nobridgemsg", 	"!!testing!! bridged and not bridged message", 	"", "TESTING",  CommandAdmin, HandleBridgeTesting)
 
 	// Your custom Functions
 	cmdhdlr.AddFunction("snarkyReplies", 		StatusBlacklist, snarkyRepliesHandler())

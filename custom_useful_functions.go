@@ -52,17 +52,17 @@ func replaceshortsandunslaveHandler(unslaveprovider string) FunctionRegisterProt
 					if unslaver != "" {
 						unslavedurl := *urlp
 						unslavedurl.Host = unslaver
-						newentry := BotPrintSimple(room, "Fixed youtube link: " + urlp.String() + "\nUnslaved youtube link: " + unslavedurl.String())
+						newentry := BotPrintSimple(room, "Fixed youtube link: " + urlp.String() + "\nUnslaved youtube link: " + unslavedurl.String()).WithNoBridge()
 						BotPrintAppend(&results, &newentry)
 					} else {
-						newentry := BotPrintSimple(room, "Fixed youtube link: " + urlp.String())
+						newentry := BotPrintSimple(room, "Fixed youtube link: " + urlp.String()).WithNoBridge()
 						BotPrintAppend(&results, &newentry)
 					}
 				} else {
 					if unslaver != "" {
 						unslavedurl := *urlp
 						unslavedurl.Host = unslaver
-						newentry := BotPrintSimple(room, "Unslaved youtube link: " + unslavedurl.String())
+						newentry := BotPrintSimple(room, "Unslaved youtube link: " + unslavedurl.String()).WithNoBridge()
 						BotPrintAppend(&results, &newentry)
 					}
 				}
@@ -86,7 +86,7 @@ func replacetwitterlinksHandler(unslaveprovider string) FunctionRegisterPrototyp
 
 				if strings.Contains(urlp.Host, "twitter.") {
 					urlp.Host = unslaver
-					newentry := BotPrintSimple(room, "Fixed twitter link: " + urlp.String())
+					newentry := BotPrintSimple(room, "Fixed twitter link: " + urlp.String()).WithNoBridge()
 					BotPrintAppend(&results, &newentry)
 				}
 			}
@@ -114,7 +114,7 @@ func ddgmeHandler(cmdhdlr *CommandHandler, searchproviderurl string, trigger str
 			newurl := *preparsed
 			newurl.RawQuery = newurl.RawQuery + url.QueryEscape(query)
 
-			return BotPrintReplied(ca.room, "Let me search that for you: " + newurl.String(), ca.evt)
+			return BotPrintSimple(ca.room, "Let me search that for you: " + newurl.String()).WithReply(ca.evt)
 		})
 
 	// If we search for someone else
@@ -141,6 +141,6 @@ func ddgmeHandler(cmdhdlr *CommandHandler, searchproviderurl string, trigger str
 		newurl := *preparsed
 		newurl.RawQuery = newurl.RawQuery + url.QueryEscape(targetevent.Content.AsMessage().Body)
 
-		return BotPrintReplied(room, "Let me search that for you: " + newurl.String(), targetevent)
+		return BotPrintSimple(room, "Let me search that for you: " + newurl.String()).WithReply(targetevent)
 	}
 }

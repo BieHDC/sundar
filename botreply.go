@@ -7,6 +7,12 @@ import (
 	id "maunium.net/go/mautrix/id"
 )
 
+
+type ExtendedMessageEventContent struct {
+	event.MessageEventContent
+	Com_cernodile_nobridge 		bool 	`json:"com.cernodile.nobridge,omitempty"`	// Tell a bridge to not bridge a certain message
+}
+
 type BotReply struct {
 	Print			bool
 	Room 			id.RoomID
@@ -16,6 +22,8 @@ type BotReply struct {
 	Msg2 			string
 
 	Replyto 		*event.Event //if _event_ != nil -> set reply
+
+	NoBridge 		bool
 
 	next			*BotReply //chain prints
 }
@@ -36,8 +44,14 @@ func BotPrintPinged(room id.RoomID, user *id.UserID, msgpre string, msgpost stri
 	return BotReply{Print: true, Room: room, Msg: msgpre, Pinged: user, Msg2: msgpost}
 }
 
-func BotPrintReplied(room id.RoomID, msg string, replyto *event.Event) BotReply {
-	return BotReply{Print: true, Room: room, Msg: msg, Replyto: replyto}
+func (br BotReply) WithNoBridge() BotReply {
+	br.NoBridge = true
+	return br
+}
+
+func (br BotReply) WithReply(replyto *event.Event) BotReply {
+	br.Replyto = replyto
+	return br
 }
 
 func BotPrintAppend(head *BotReply, appendee *BotReply) {
@@ -60,12 +74,15 @@ func (cmdhdlr *CommandHandler) BotPrint(br BotReply) {
 	}
 	//fmt.Printf("%#v\n", br)
 
-	dispatch := event.MessageEventContent{
-		MsgType:       event.MsgNotice,
-	}
+	dispatch := ExtendedMessageEventContent{}
+	dispatch.MsgType = event.MsgNotice
 
 	if br.Replyto != nil {
 		dispatch.SetReply(br.Replyto)
+	}
+
+	if br.NoBridge {
+		dispatch.Com_cernodile_nobridge = true
 	}
 
 	if br.Pinged == nil {
@@ -84,6 +101,7 @@ func (cmdhdlr *CommandHandler) BotPrint(br BotReply) {
 		}
 	}
 
+	//fmt.Printf("%#v\n", dispatch)
 	cmdhdlr.client.SendMessageEvent(br.Room, event.EventMessage, dispatch)
 
 	if br.Room == cmdhdlr.eventsChannel && cmdhdlr.eventsToStdout {
