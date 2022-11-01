@@ -33,11 +33,39 @@ func geturlorpanic(unslaveprovider string) string {
 	}
 }
 
+func removequotefrombody(argc int, argv []string) (int, []string) {
+	// If our message is a reply, skip until it ends
+	// If the message starts with "> ", we have quote
+	//  Note: the parser trims the whitespace from ">"
+	if argv[0] == ">" {
+		for i := 0 ; i < argc; i++ {
+			// Look for the end of the quote
+			_, after, contains := strings.Cut(argv[i], "\n\n")
+
+			// If the substring is not yet there, check the next arg
+			if !contains {
+				continue
+			}
+
+			// We have found the end, replace the current arg with the rest
+			//  which is part of the new posters message
+			argv[i] = after
+
+			newargv := argv[i:]
+			return len(newargv), newargv
+		}
+	}
+	return argc, argv
+}
+
 func replaceshortsandunslaveHandler(unslaveprovider string) FunctionRegisterPrototype {
 	unslaver := geturlorpanic(unslaveprovider)
 
 	return func(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, evt *event.Event) BotReply {
 		results := BotPrintNothing()
+
+		argc, argv = removequotefrombody(argc, argv)
+
 		for i := 0; i < argc; i++ {
 			urlp, err := url.Parse(argv[i])
 			if err != nil {
@@ -78,6 +106,8 @@ func replacetwitterlinksHandler(unslaveprovider string) FunctionRegisterPrototyp
 	return func(cmdhdlr *CommandHandler, room id.RoomID, sender id.UserID, argc int, argv []string, evt *event.Event) BotReply {
 		results := BotPrintNothing()
 		if unslaver != "" {
+			argc, argv = removequotefrombody(argc, argv)
+
 			for i := 0; i < argc; i++ {
 				urlp, err := url.Parse(argv[i])
 				if err != nil {

@@ -1,6 +1,9 @@
 # Changelog
 ---
 
+## Version 2.1.1
+- Fix oversight in the url replacers. Now the replied to message is stripped out before checking.
+
 ## Version 2.1.0
 - The `BotPrint*` commands now have modifiers for `WithReply` and `WithNoBridge` instead of being dedicated functions to allow better flexibility.
 - `WithNoBridge` implements an unofficial non-spec which adds `com.cernodile.nobridge,omitempty` to every `m.room.message`->`m.notice`->`content` when set which hints to bridge bots who implement it that the message should not be bridged to the other side.
