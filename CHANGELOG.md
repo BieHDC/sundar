@@ -1,6 +1,9 @@
 # Changelog
 ---
 
+## Version 2.1.2
+- Move SetReply to after message composition to fix the bug of broken messages.
+
 ## Version 2.1.1
 - Fix oversight in the url replacers. Now the replied to message is stripped out before checking.
 

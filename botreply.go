@@ -77,17 +77,10 @@ func (cmdhdlr *CommandHandler) BotPrint(br BotReply) {
 	dispatch := ExtendedMessageEventContent{}
 	dispatch.MsgType = event.MsgNotice
 
-	if br.Replyto != nil {
-		dispatch.SetReply(br.Replyto)
-	}
-
-	if br.NoBridge {
-		dispatch.Com_cernodile_nobridge = true
-	}
-
 	if br.Pinged == nil {
 		dispatch.Body = br.Msg
-		if br.Msg2 != "" { // Its a formatted message, but not a pinged one
+		if br.Msg2 != "" {
+			// Its a formatted message, but not a pinged one
 			dispatch.Format = "org.matrix.custom.html"
 			dispatch.FormattedBody = br.Msg2
 		}
@@ -99,6 +92,14 @@ func (cmdhdlr *CommandHandler) BotPrint(br BotReply) {
 			dispatch.Format = "org.matrix.custom.html"
 			dispatch.FormattedBody = br.Msg + pingstring + br.Msg2
 		}
+	}
+
+	if br.Replyto != nil {
+		dispatch.SetReply(br.Replyto)
+	}
+
+	if br.NoBridge {
+		dispatch.Com_cernodile_nobridge = true
 	}
 
 	//fmt.Printf("%#v\n", dispatch)
