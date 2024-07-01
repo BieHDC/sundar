@@ -1,3 +1,8 @@
+# Abandoned
+I am not developing or rewriting this anymore and i dont recommend using it as a base due to it being outdated and the code being not nice (first ever go project of mine). However since it does a lot of things it is good documentation for future developers.
+
+---
+---
 # Safed Sundarata - A Matrix Bot written in Go
 Safed Sundarata, or in short Sundar, is a Matrix bot with a big variety of functionality. The name was chosen by the first person who answered when i asked for one, because i am not good with naming (see code). It is currently being used by the [ReactOS](https://reactos.org/) Community [on Matrix](https://matrix.to/#/#community:reactos.org) with it's main purpose of providing the `!error <code>` command for developers to look up Windows Error Messages.
 
